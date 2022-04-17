@@ -82,8 +82,8 @@ tokenomics_summarized %>%
 ggplot2::ggsave(path = "img", 
                 filename = "emission.png",
                 units = "in",
-                width = 13.5,
-                height = 11.25)
+                width = 15,
+                height = 10)
 ```
 
 ### Distribution: bar chart
@@ -104,8 +104,8 @@ base_layer %>%
 ggplot2::ggsave(path = "img", 
                 filename = "distribution.png",
                 units = "in",
-                width = 13.5,
-                height = 11.25)
+                width = 15,
+                height = 10)
 ```
 
 ### Distribution: donut chart
