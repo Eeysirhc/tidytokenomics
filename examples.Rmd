@@ -1,0 +1,129 @@
+---
+title: "tidytokenomics: examples"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+## Author: Eeysirhc
+## Date written: 2022-02-15
+## Last updated: 2022-04-17
+
+### Source functions
+```{r}
+source("functions.R")
+```
+
+### Parameters
+
+[Paideia tokenomics](https://docs.google.com/spreadsheets/d/1ReMuHvrn-ZNIAkk7F0fezmWEvjWeYzUg8PNfXyEwNm4/edit?usp=sharing)
+
+```{r}
+total_supply <- 200e6
+outlook_years <- 4
+
+params <- tribble(
+  ~category, ~token_allocation, ~percent_total_supply, ~price_per_token, ~percent_tge_issuance, ~emission_frequency, ~first_emission_day, ~last_emission_day,
+  "Token Distribution", "ErgoPad Staker Round", 0.14, 0.001, 0.00, "Daily", 1, 360,
+  "Token Distribution", "Seed Round", 0.18, 0.005, 0.00, "Daily", 1, 270,
+  "Token Distribution", "Strategic Round", 0.10, 0.008, 0.00, "Daily", 1, 180,
+  "-", "Liquidity (Locked)", 0.08, 0.01, 1.00, "-", 1, 1, 
+  "DAO", "Marketing", 0.10, 0.00, 0.50, "Monthly", 30, 720,
+  "Ecosystem", "Staking Rewards", 0.20, 0.00, 0.00, "Daily", 1, 1440,
+  "Token Distribution", "Airdrops", 0.01, 0.00, 1.00, "-", 1, 1,
+  "DAO", "Company Reserve", 0.08, 0.00, 0.10, "Quarterly", 1, 480, 
+  "Team & Partners", "Advisors", 0.03, 0.00, 0.05, "Monthly", 30, 180,
+  "Team & Partners", "Team", 0.08, 0.00, 0.05, "Monthly", 180, 360
+  )
+```
+
+### Prepare data
+```{r}
+base_layer <- tokenomics_layer(params$category, params$token_allocation, params$percent_total_supply, params$price_per_token, params$percent_tge_issuance, params$emission_frequency, params$first_emission_day, params$last_emission_day)
+
+base_layer
+```
+
+### Data processing
+```{r}
+# Simulate
+tokenomics_data <- mapply(tokenomics_simulate, base_layer$category, base_layer$token_allocation, base_layer$tge_issuance_tokens, base_layer$standardized_emission, base_layer$emission_frequency, base_layer$first_emission_day, base_layer$last_emission_day, SIMPLIFY = FALSE) %>% 
+  bind_rows() %>% 
+  mutate(month = case_when(day %% 30 == 0 ~ day/30)) %>% 
+  fill(month, .direction='up') 
+
+
+# Summarize
+tokenomics_summarized <- tokenomics_data %>% 
+  group_by(category, token_allocation, month) %>% 
+  summarize(tokens = sum(tokens)) %>% 
+  ungroup() %>% 
+  group_by(category, token_allocation) %>% 
+  mutate(tokens_supply = cumsum(tokens)) %>% 
+  ungroup()
+```
+
+
+
+### Graph: 2 year emission
+```{r}
+tokenomics_summarized %>% 
+  filter(month <= 30) %>% 
+  ggplot(aes(month, tokens_supply, fill = token_allocation)) +
+  geom_area(alpha = 0.7) +
+  labs(x = "Months", y = NULL, fill = NULL,
+       title = "Emission after 2 years") +
+  scale_y_continuous(labels = comma_format()) +
+  scale_fill_brewer(palette = 'Paired') + 
+  expand_limits(ymin = 0, ymax = total_supply * 1.05) +
+  theme_minimal(base_size = 15) +
+  theme(legend.position = "top")
+
+ggplot2::ggsave(path = "img", 
+                filename = "emission.png",
+                units = "in",
+                width = 13.5,
+                height = 11.25)
+```
+
+### Distribution: bar chart
+```{r}
+base_layer %>% 
+  mutate(token_allocation = reorder(token_allocation, percent_total_supply)) %>% 
+  ggplot(aes(token_allocation, percent_total_supply, fill = token_allocation)) +
+  geom_col() + 
+  coord_flip() +
+  scale_y_continuous(labels = percent_format(round(2))) +
+  expand_limits(ymin = 0, ymax = max(base_layer$percent_total_supply) * 1.05) +
+  labs(x = NULL, y = NULL, fill = NULL,
+       title = "Distribution by category") +
+  scale_fill_brewer(palette = 'Paired') +
+  theme_minimal(base_size = 15) +
+  theme(legend.position = "none")
+
+ggplot2::ggsave(path = "img", 
+                filename = "distribution.png",
+                units = "in",
+                width = 13.5,
+                height = 11.25)
+```
+
+### Distribution: donut chart
+
+*Note:* WIP but also should probably never use donut/pie charts...like ever.
+
+```{r}
+base_layer %>% 
+  mutate(token_allocation = reorder(token_allocation, percent_total_supply),
+         label_position = cumsum(percent_total_supply) - .5 * percent_total_supply) %>% 
+  ggplot(aes(x = 2, y = percent_total_supply, fill = token_allocation)) + 
+  geom_bar(stat = "identity") +
+  coord_polar("y", start = 200) +
+  geom_text(aes(y = label_position,
+                label = paste(100 * percent_total_supply, "%", sep = "")), col = "white") +
+  theme_void() +
+  scale_fill_brewer(palette = "Paired") +
+  xlim(.2, 2.5)
+```
+
+
